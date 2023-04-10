@@ -70,7 +70,7 @@ class JaegerPropagatorTest extends TestCase{
     public function testExtractDebugId(){
 
         $jaeger = new JaegerPropagator();
-        $carrier = [];
+        $carrier[Constants\Trace_Baggage_Header_Prefix . 'baggage'] = 2;
 
         $context = $jaeger->extract(Formats\TEXT_MAP, $carrier);
         $this->assertTrue($context->debugId == 0);
@@ -85,6 +85,7 @@ class JaegerPropagatorTest extends TestCase{
         $jaeger = new JaegerPropagator();
 
         $carrier[Constants\Trace_Baggage_Header_Prefix] = '2.0.0';
+        $carrier[Constants\Jaeger_Debug_Header] = true;
         $context = $jaeger->extract(Formats\TEXT_MAP, $carrier);
         $this->assertTrue($context->baggage == null);
 
@@ -113,6 +114,7 @@ class JaegerPropagatorTest extends TestCase{
         $carrier = [];
 
         $carrier[Constants\Jaeger_Baggage_Header] = 'version';
+        $carrier[Constants\Jaeger_Debug_Header] = true;
         $context = $jaeger->extract(Formats\TEXT_MAP, $carrier);
         $this->assertTrue($context->baggage == null);
     }
@@ -131,5 +133,28 @@ class JaegerPropagatorTest extends TestCase{
         $this->assertTrue($context->parentId == 0);
         $this->assertTrue($context->spanId == 1562237095801441413);
         $this->assertTrue($context->flags == 1);
+    }
+
+
+    public function testExtractPsr7(){
+
+        $jaeger = new JaegerPropagator();
+        $carrier = [];
+        $carrier[] = [strtoupper(Constants\Tracer_State_Header_Name) => '15ae2e5c8e2ecc85:15ae2e5c8e2ecc85:0:1'];
+
+        $context = $jaeger->extract(Formats\TEXT_MAP, $carrier);
+        $this->assertTrue($context->traceIdLow == 1562237095801441413);
+        $this->assertTrue($context->parentId == 0);
+        $this->assertTrue($context->spanId == 1562237095801441413);
+        $this->assertTrue($context->flags == 1);
+    }
+
+
+    public function testExtractReturnsNull(){
+        $jaeger = new JaegerPropagator();
+        $carrier = [];
+
+        $context = $jaeger->extract(Formats\TEXT_MAP, $carrier);
+        $this->assertNull($context);
     }
 }

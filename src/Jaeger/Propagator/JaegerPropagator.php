@@ -30,21 +30,30 @@ class JaegerPropagator implements Propagator{
     }
 
 
-    /**
-     * 提取
-     * @param string $format
-     * @param $carrier
-     */
     public function extract($format, $carrier){
-        $spanContext = new SpanContext(0, 0, 0, null, 0);
-
+        $spanContext = null;
+        
         $carrier = array_change_key_case($carrier, CASE_LOWER);
 
         foreach ($carrier as $k => $v){
+            
+            if(!in_array($k, [Constants\Tracer_State_Header_Name,
+                Constants\Jaeger_Debug_Header, Constants\Jaeger_Baggage_Header]) &&
+                stripos($k, Constants\Trace_Baggage_Header_Prefix) === false){
+                continue;
+            }
 
-            $v = urldecode($v);
+            if($spanContext === null){
+                $spanContext = new SpanContext(0, 0, 0, null, 0);
+            }
+            
+            if(is_array($v)){
+                $v = urldecode(current($v));
+            }else {
+                $v = urldecode($v);
+            }
             if($k == Constants\Tracer_State_Header_Name){
-                list($traceId, $spanId, $parentId,$flags) = explode(':', $carrier[$k]);
+                list($traceId, $spanId, $parentId,$flags) = explode(':', $v);
 
                 $spanContext->spanId = $spanContext->hexToSignedInt($spanId);
                 $spanContext->parentId = $spanContext->hexToSignedInt($parentId);

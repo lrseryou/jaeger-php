@@ -21,6 +21,7 @@ use Jaeger\Sampler\ConstSampler;
 use Jaeger\ScopeManager;
 use Jaeger\Span;
 use Jaeger\Transport\TransportUdp;
+use OpenTracing\Reference;
 use PHPUnit\Framework\TestCase;
 use OpenTracing\Formats;
 use Jaeger\SpanContext;
@@ -81,7 +82,7 @@ class JaegerTest extends TestCase
         $Jaeger->setPropagator(new JaegerPropagator());
 
         $context = new SpanContext(1, 1, 1, null, 1);
-        $this->expectExceptionMessage('not support format http_headers');
+        $this->expectExceptionMessage('The format \'http_headers\' is not supported.');
 
         $Jaeger->inject($context, Formats\HTTP_HEADERS, $_SERVER);
     }
@@ -105,7 +106,7 @@ class JaegerTest extends TestCase
         $Jaeger->setPropagator(new JaegerPropagator());
 
         $_SERVER[strtoupper(Constants\Tracer_State_Header_Name)] = '1:1:1:1';
-        $this->expectExceptionMessage('not support format http_headers');
+        $this->expectExceptionMessage('The format \'http_headers\' is not supported.');
 
         $Jaeger->extract(Formats\HTTP_HEADERS, $_SERVER);
     }
@@ -113,8 +114,73 @@ class JaegerTest extends TestCase
 
     public function testStartSpan(){
         $Jaeger = $this->getJaeger();
-        $Jaeger->startSpan('test');
+        $span = $Jaeger->startSpan('test');
+        $this->assertNotEmpty($span->startTime);
         $this->assertNotEmpty($Jaeger->getSpans());
+    }
+
+
+    public function testStartSpanWithFollowsFromTypeRef()
+    {
+        $jaeger = $this->getJaeger();
+        $rootSpan = $jaeger->startSpan('root-a');
+        $childSpan = $jaeger->startSpan('span-a', [
+            'references' => Reference::create(Reference::FOLLOWS_FROM, $rootSpan),
+        ]);
+
+        $this->assertSame($childSpan->spanContext->traceIdLow, $rootSpan->spanContext->traceIdLow);
+        $this->assertSame(current($childSpan->references)->getContext(), $rootSpan->spanContext);
+
+        $otherRootSpan = $jaeger->startSpan('root-a');
+        $childSpan = $jaeger->startSpan('span-b', [
+            'references' => [
+                Reference::create(Reference::FOLLOWS_FROM, $rootSpan),
+                Reference::create(Reference::FOLLOWS_FROM, $otherRootSpan),
+            ],
+        ]);
+
+        $this->assertSame($childSpan->spanContext->traceIdLow, $otherRootSpan->spanContext->traceIdLow);
+    }
+
+
+    public function testStartSpanWithChildOfTypeRef()
+    {
+        $jaeger = $this->getJaeger();
+        $rootSpan = $jaeger->startSpan('root-a');
+        $otherRootSpan = $jaeger->startSpan('root-b');
+        $childSpan = $jaeger->startSpan('span-a', [
+            'references' => [
+                Reference::create(Reference::CHILD_OF, $rootSpan),
+                Reference::create(Reference::CHILD_OF, $otherRootSpan),
+            ],
+        ]);
+
+        $this->assertSame($childSpan->spanContext->traceIdLow, $rootSpan->spanContext->traceIdLow);
+    }
+
+
+    public function testStartSpanWithCustomStartTime()
+    {
+        $jaeger = $this->getJaeger();
+        $span = $jaeger->startSpan('test', ['start_time' => 1499355363.123456]);
+
+        $this->assertSame(1499355363123456, $span->startTime);
+    }
+
+
+    public function testStartSpanWithAllRefType()
+    {
+        $jaeger = $this->getJaeger();
+        $rootSpan = $jaeger->startSpan('root-a');
+        $otherRootSpan = $jaeger->startSpan('root-b');
+        $childSpan = $jaeger->startSpan('span-a', [
+            'references' => [
+                Reference::create(Reference::FOLLOWS_FROM, $rootSpan),
+                Reference::create(Reference::CHILD_OF, $otherRootSpan),
+            ],
+        ]);
+
+        $this->assertSame($childSpan->spanContext->traceIdLow, $otherRootSpan->spanContext->traceIdLow);
     }
 
 
@@ -148,5 +214,17 @@ class JaegerTest extends TestCase
         $Jaeger->startSpan('test');
         $Jaeger->flush();
         $this->assertEmpty($Jaeger->getSpans());
+    }
+
+
+    public function testNestedSpanBaggage(){
+        $tracer = $this->getJaeger();
+
+        $parent = $tracer->startSpan('parent');
+        $parent->addBaggageItem('key', 'value');
+
+        $child = $tracer->startSpan('child', [Reference::CHILD_OF => $parent]);
+
+        $this->assertEquals($parent->getBaggageItem('key'), $child->getBaggageItem('key'));
     }
 }

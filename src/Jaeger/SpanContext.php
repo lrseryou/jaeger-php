@@ -54,7 +54,7 @@ class SpanContext implements \OpenTracing\SpanContext{
 
 
     public function getBaggageItem($key){
-        return isset($this->baggage[$key]) ? $this->baggage[$key] : false;
+        return isset($this->baggage[$key]) ? $this->baggage[$key] : null;
     }
 
 
@@ -145,4 +145,20 @@ class SpanContext implements \OpenTracing\SpanContext{
     }
 
 
+    /**
+     * @return bool
+     */
+    public function isValid()
+    {
+        return $this->isTraceIdValid() && $this->spanId;
+    }
+
+
+    /**
+     * @return bool
+     */
+    public function isTraceIdValid()
+    {
+        return $this->traceIdLow || $this->traceIdHigh;
+    }
 }

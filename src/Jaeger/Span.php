@@ -36,9 +36,9 @@ class Span implements \OpenTracing\Span{
 
     public $references = [];
 
-    public function __construct($operationName, \OpenTracing\SpanContext $spanContext, $references){
+    public function __construct($operationName, \OpenTracing\SpanContext $spanContext, $references, $startTime = null){
         $this->operationName = $operationName;
-        $this->startTime = $this->microtimeToInt();
+        $this->startTime = $startTime == null ? $this->microtimeToInt() : $startTime;
         $this->spanContext = $spanContext;
         $this->references = $references;
     }
@@ -113,10 +113,10 @@ class Span implements \OpenTracing\Span{
 
     /**
      * @param string $key
-     * @return string
+     * @return string|null
      */
     public function getBaggageItem($key){
-        $this->spanContext->getBaggageItem($key);
+        return $this->spanContext->getBaggageItem($key);
     }
 
 
